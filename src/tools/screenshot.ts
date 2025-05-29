@@ -28,6 +28,7 @@ const screenshotSchema = z.object({
   filename: z.string().optional().describe('File name to save the screenshot to. Defaults to `page-{timestamp}.{png|jpeg}` if not specified.'),
   element: z.string().optional().describe('Human-readable element description used to obtain permission to screenshot the element. If not provided, the screenshot will be taken of viewport. If element is provided, ref must be provided too.'),
   ref: z.string().optional().describe('Exact target element reference from the page snapshot. If not provided, the screenshot will be taken of viewport. If ref is provided, element must be provided too.'),
+  fullPage: z.boolean().optional().describe('Take a full page screenshot capturing the entire scrollable content instead of just the viewport'),
 }).refine(data => {
   return !!data.element === !!data.ref;
 }, {
@@ -40,7 +41,7 @@ const screenshot = defineTool({
   schema: {
     name: 'browser_take_screenshot',
     title: 'Take a screenshot',
-    description: `Take a screenshot of the current page. You can't perform actions based on the screenshot, use browser_snapshot for actions.`,
+    description: `Take a screenshot of the current page. You can capture the viewport, full page, or specific elements. You can't perform actions based on the screenshot, use browser_snapshot for actions.`,
     inputSchema: screenshotSchema,
     type: 'readOnly',
   },
@@ -50,11 +51,17 @@ const screenshot = defineTool({
     const snapshot = tab.snapshotOrDie();
     const fileType = params.raw ? 'png' : 'jpeg';
     const fileName = await outputFile(context.config, params.filename ?? `page-${new Date().toISOString()}.${fileType}`);
-    const options: playwright.PageScreenshotOptions = { type: fileType, quality: fileType === 'png' ? undefined : 50, scale: 'css', path: fileName };
+    const options: playwright.PageScreenshotOptions = { 
+      type: fileType, 
+      quality: fileType === 'png' ? undefined : 50, 
+      scale: 'css', 
+      path: fileName,
+      fullPage: params.fullPage
+    };
     const isElementScreenshot = params.element && params.ref;
 
     const code = [
-      `// Screenshot ${isElementScreenshot ? params.element : 'viewport'} and save it as ${fileName}`,
+      `// Screenshot ${isElementScreenshot ? params.element : params.fullPage ? 'full page' : 'viewport'} and save it as ${fileName}`,
     ];
 
     const locator = params.ref ? snapshot.refLocator({ element: params.element || '', ref: params.ref }) : null;
